@@ -41,7 +41,7 @@ void setup() {
   pinMode(greenPin, OUTPUT); 
   pinMode(bluePin, OUTPUT); 
 
-  color(0, 0, 0); // turn the RGB LED red
+  color(0, 0, 0); // turn "off"
 
   lcd.setCursor(2, 1);
   idx = 0;
@@ -49,7 +49,6 @@ void setup() {
 }
 
 void loop() {
-  // read the potentiometer on A0:
 
   char key = keypad.getKey();
   
