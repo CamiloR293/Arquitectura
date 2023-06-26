@@ -12,6 +12,10 @@ void timeout_T4();
 void measure_Temp();
 void readPassword();
 
+void intHallSensor();
+void intTrackingSensor();
+void intMetalTouchSensor();
+
 #define DEBUG(a) Serial.print(millis()); Serial.print(": "); Serial.println(a);
 
 //Def liquid and dht
@@ -46,6 +50,7 @@ int execute = 0;
 const int redPin = 15; 
 const int greenPin = 16;
 const int bluePin = 17;
+const int intPinHall = 2;
 const int intPinMetal = 1;
 const int intPinTracking = 0;
 float tempOnState = 0;  
@@ -193,6 +198,9 @@ void setup()
   pinMode(greenPin, OUTPUT); 
   pinMode(bluePin, OUTPUT); 
   pinMode(buzzerPin, OUTPUT);
+  pinMode(intPinHall, INPUT);
+  pinMode(intPinTracking, INPUT);
+  pinMode(intPinMetal, INPUT);
 
   color(0, 0, 0); //turn off
 
@@ -200,9 +208,10 @@ void setup()
   delay(500);
   lcd.clear();
   
-  attachInterrupt(digitalPinToInterrupt(intPinMetal), intMetalTouch, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(intPinTracking), intTracking, CHANGE);
-  
+  attachInterrupt(digitalPinToInterrupt(intPinHall), intHallSensor, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(intPinTracking), intTrackingSensor, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(intPinMetal), intMetalTouchSensor, CHANGE);
+
   Serial.begin(115200);
   Serial.println("Starting State Machine...");
 
@@ -328,13 +337,25 @@ void buzz(){
 //Interrupciones
 //====================================================
 
-void intMetalTouch(){
-  
-  color(255,0,0);
+void intHallSensor() {
+  if (stateMachine.GetState() == EventosPuertosYVentanas) {
+    input = Input::gateOpen;
+    Serial.println("Sensor de campo magnetico activado");
+  }
 }
 
-void intTracking(){  
-    
+void intTrackingSensor() {
+  if (stateMachine.GetState() == EventosPuertosYVentanas) {
+    input = Input::gateOpen;
+    Serial.println("Sensor de seguimiento activado");
+  }
+}
+
+void intMetalTouchSensor() {
+  if (stateMachine.GetState() == EventosPuertosYVentanas) {
+    input = Input::gateOpen;
+    Serial.println("Sensor de metales activado");
+  }
 }
 
 //====================================================
