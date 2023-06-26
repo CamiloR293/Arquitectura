@@ -39,12 +39,15 @@ char keys[KEYPAD_ROWS][KEYPAD_COLS] = {
 };
 
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, KEYPAD_ROWS, KEYPAD_COLS);
-#define DHT11_PIN       A4
-const int buzzerPin = A5;
+#define DHT11_PIN       A15
+const int buzzerPin = A14;
 int fre;//set the variable to store the frequence value
+int execute = 0;
 const int redPin = 15; 
 const int greenPin = 16;
 const int bluePin = 17;
+const int intPinMetal = 1;
+const int intPinTracking = 0;
 float tempOnState = 0;  
 char inputPassword[5];
 char password[5] = "12345";
@@ -70,7 +73,8 @@ enum Input
   timeOut = 1,
   gateOpen = 2,
   tempVeriffy = 3,
-  Unknown = 4,
+  tempAndTime = 4,
+  Unknown = 5,
 };
 
 // Create new StateMachine
@@ -85,7 +89,7 @@ void entryIngreso(){
   
   idx = 0;
   flag = false;
-  
+  color(0,0,0);
   lcd.clear();
   
   Serial.println("In Ev Mo AlS AlA");
@@ -95,7 +99,8 @@ void entryIngreso(){
   lcd.setCursor(0,1);
 }
 void entryEvents(){
-  
+  buzzer = false;
+  color(0,0,0);
   lcd.clear();
   asyncTaskTime.Start(); //timeout 2 sec
   asyncTaskTemp.Stop(); //Detener escaneo de temperatura
@@ -105,6 +110,7 @@ void entryEvents(){
   lcd.print("En eventos");
 }
 void entryMonitor(){
+  
   lcd.clear();
   asyncTaskTime1.Start(); //timeout 10 sec
   asyncTaskTemp.Start(); //Revisar temperatura
@@ -115,8 +121,13 @@ void entryMonitor(){
   lcd.print("En monitor");
 }
 void entryAlertSecurity(){
+  execute = 0;
   lcd.clear();
+  color(255,0,255);
   asyncTaskTime.Stop(); //que deje de contar 2 segundos
+  asyncTaskTime1.Stop();
+  asyncTaskTime3.Stop();
+  asyncTaskTemp.Stop();
   asyncTaskTime2.Start();
   tempOnState = 24.5;
   Serial.println("In Ev Mo AlS AlA");
@@ -126,6 +137,8 @@ void entryAlertSecurity(){
   buzzer = true;
 }
 void entryAlarmEnvironment(){
+  color(0,0,255);
+  asyncTaskTime1.Stop();
   lcd.clear();
   if(DHT.getTemperature() < 25.5){
     asyncTaskTime1.Stop();
@@ -152,7 +165,7 @@ void setupStateMachine()
   stateMachine.AddTransition(MonitorAmbiental, AlarmaAmbiental, []() { return input == tempVeriffy; });
   stateMachine.AddTransition(MonitorAmbiental, EventosPuertosYVentanas, []() { return input == timeOut; });
   stateMachine.AddTransition(AlarmaAmbiental, MonitorAmbiental, []() { return input == tempVeriffy; });
-  stateMachine.AddTransition(AlarmaAmbiental, AlertaSeguridad, []() { return input == tempVeriffy; });
+  stateMachine.AddTransition(AlarmaAmbiental, AlertaSeguridad, []() { return input == tempAndTime; });
 
   stateMachine.AddTransition(AlertaSeguridad, EventosPuertosYVentanas, []() { return input == timeOut; });
 
@@ -187,7 +200,8 @@ void setup()
   delay(500);
   lcd.clear();
   
-  
+  attachInterrupt(digitalPinToInterrupt(intPinMetal), intMetalTouch, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(intPinTracking), intTracking, CHANGE);
   
   Serial.begin(115200);
   Serial.println("Starting State Machine...");
@@ -225,9 +239,12 @@ void loop()
   asyncTaskTime.Update();
   asyncTaskTime1.Update();
   asyncTaskTime2.Update();
+  asyncTaskTime3.Update();
   asyncTaskTemp.Update();
   if(buzzer){
     buzz();
+  }else{
+    noTone(buzzerPin);
   }
   // Update State Machine
   stateMachine.Update();
@@ -269,12 +286,14 @@ int readInput(){
         lcd.print("Clave correcta.");
         //digitalWrite(led_green, HIGH);
         color(0, 255, 0); // green On
+        delay(1000);
         currentInput = Input::passwordCorrect;
       }else if(failCount >= 3){
         lcd.clear();
         lcd.print("Sistema bloqueado.");
         //digitalWrite(led_red, HIGH);
         color(255, 0, 0); //red on
+        delay(1000);
       }
     }
   }
@@ -303,7 +322,19 @@ int readInput(){
 //====================================================
 
 void buzz(){
-  tone(3,800);
+  tone(buzzerPin,800);
+}
+//====================================================
+//Interrupciones
+//====================================================
+
+void intMetalTouch(){
+  
+  color(255,0,0);
+}
+
+void intTracking(){  
+    
 }
 
 //====================================================
@@ -316,20 +347,24 @@ void timeout_T1(){
 }
 void timeout_T2(){
   DEBUG("going events timeout 10 sec");
+  color(0,0,0);
   input = Input::timeOut;
 }
 void timeout_T3(){
   DEBUG("going events timeout 6 sec");
+  color(0,0,0);
   input = Input::timeOut;
 }
 void timeout_T4(){
-  DEBUG("going events timeout 5 sec");
-  input = Input::timeOut;
+  DEBUG("going alertSecurity 5 sec");
+  color(255,0,0);
+  input = Input::tempAndTime;
 }
 //====================================================
 //measure_Temp
 //====================================================
 void measure_Temp() {
+  
   input = Input::Unknown;
   Serial.println("Temp");
   int chk = DHT.read11(DHT11_PIN);
@@ -351,13 +386,17 @@ void measure_Temp() {
   // DISPLAY DATA
   float value_Temp = DHT.getTemperature();
   Serial.println(value_Temp, 1);
-  lcd.clear();
   lcd.setCursor(0, 1);
   lcd.print("Temp: ");
   lcd.print(value_Temp);
 
-  if (stateMachine.GetState() == MonitorAmbiental && value_Temp >= 25.3) {
+  if (stateMachine.GetState() == MonitorAmbiental && value_Temp >= 25) {
     input = Input::tempVeriffy;
+  }
+  if(stateMachine.GetState() == AlarmaAmbiental && value_Temp >= 25 && execute < 1){
+    execute++;
+    asyncTaskTime3.Start();
+    asyncTaskTemp.Stop();
   }
   if (stateMachine.GetState() == AlarmaAmbiental && value_Temp < 25) {
     input = Input::tempVeriffy;
@@ -370,4 +409,3 @@ void color (unsigned char red, unsigned char green, unsigned char blue) // the c
   analogWrite(bluePin, blue);
   analogWrite(greenPin, green);
 }
-
