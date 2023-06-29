@@ -50,16 +50,22 @@ int execute = 0;
 const int redPin = 15; 
 const int greenPin = 16;
 const int bluePin = 17;
-const int intPinHall = 2;
-const int intPinMetal = 1;
-const int intPinTracking = 0;
+const int intPinHall = 19;
+const int intPinMetal = 20;
+const int analogPin = A8;
+const int intPinTracking = 21;
+
 float tempOnState = 0;  
+
 char inputPassword[5];
 char password[5] = "12345";
 unsigned char idx = 0;
+
 int failCount = 0;
+
 bool flag = false;
 bool buzzer = false;
+bool gate = false;
 
 // State Alias
 enum State
@@ -198,6 +204,7 @@ void setup()
   pinMode(greenPin, OUTPUT); 
   pinMode(bluePin, OUTPUT); 
   pinMode(buzzerPin, OUTPUT);
+
   pinMode(intPinHall, INPUT);
   pinMode(intPinTracking, INPUT);
   pinMode(intPinMetal, INPUT);
@@ -208,9 +215,9 @@ void setup()
   delay(500);
   lcd.clear();
   
-  attachInterrupt(digitalPinToInterrupt(intPinHall), intHallSensor, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(intPinTracking), intTrackingSensor, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(intPinMetal), intMetalTouchSensor, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(intPinHall), intHallSensor, FALLING);
+  attachInterrupt(digitalPinToInterrupt(intPinTracking), intTrackingSensor, FALLING);
+  attachInterrupt(digitalPinToInterrupt(intPinMetal), intMetalTouchSensor, FALLING);
 
   Serial.begin(115200);
   Serial.println("Starting State Machine...");
@@ -250,15 +257,17 @@ void loop()
   asyncTaskTime2.Update();
   asyncTaskTime3.Update();
   asyncTaskTemp.Update();
+
+  activateAlert();
+  
   if(buzzer){
     buzz();
   }else{
     noTone(buzzerPin);
   }
-  // Update State Machine
+  
   stateMachine.Update();
-  
-  
+
 }
 //====================================================
 
@@ -279,8 +288,7 @@ int readInput(){
         if(inputPassword[i] != password[i]){
           lcd.clear();
           lcd.print("Clave incorrecta.");
-          //digitalWrite(led_red, HIGH);
-          color(255, 0, 0); //red On
+          color(255, 0, 0);
           delay(1000);
           failCount++;
           entryIngreso();
@@ -293,35 +301,18 @@ int readInput(){
       if(flag){
         lcd.clear();
         lcd.print("Clave correcta.");
-        //digitalWrite(led_green, HIGH);
-        color(0, 255, 0); // green On
+        color(0, 255, 0);
         delay(1000);
         currentInput = Input::passwordCorrect;
       }else if(failCount >= 3){
         lcd.clear();
         lcd.print("Sistema bloqueado.");
-        //digitalWrite(led_red, HIGH);
-        color(255, 0, 0); //red on
+        color(255, 0, 0);
         delay(1000);
       }
     }
   }
-  /*if (Serial.available())
-  {
-    char incomingChar = Serial.read();
-
-    switch (incomingChar)
-    {
-      case 'p': 
-            currentInput = Input::passwordCorrect;  
-            break;
-      case 'o': 
-            currentInput = Input::gateOpen; 
-            break;
-      default: break;
-    }
-  }*/
-
+  
   return static_cast<int>(currentInput);
 }
 
@@ -333,29 +324,32 @@ int readInput(){
 void buzz(){
   tone(buzzerPin,800);
 }
+
 //====================================================
 //Interrupciones
 //====================================================
 
-void intHallSensor() {
-  if (stateMachine.GetState() == EventosPuertosYVentanas) {
+void activateAlert(){
+  if(gate && stateMachine.GetState() == EventosPuertosYVentanas){
     input = Input::gateOpen;
-    Serial.println("Sensor de campo magnetico activado");
+    gate = false;
   }
+
+}
+
+void intHallSensor() {
+  gate = true;
+  Serial.println("Sensor de campo magnetico activado");
 }
 
 void intTrackingSensor() {
-  if (stateMachine.GetState() == EventosPuertosYVentanas) {
-    input = Input::gateOpen;
-    Serial.println("Sensor de seguimiento activado");
-  }
+  gate = true;
+  Serial.println("Sensor de seguimiento activado");
 }
 
 void intMetalTouchSensor() {
-  if (stateMachine.GetState() == EventosPuertosYVentanas) {
-    input = Input::gateOpen;
-    Serial.println("Sensor de metales activado");
-  }
+  gate = true;
+  Serial.println("Sensor de metales activado");
 }
 
 //====================================================
